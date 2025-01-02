@@ -1,0 +1,13 @@
+name: streamlit-modeling
+channels:
+  - conda-forge
+  - nodefaults
+dependencies:
+  - bambi=0.15.0=pyhd8ed1ab_0
+  - plotly=5.24.1=pyhd8ed1ab_1
+  - rioxarray=0.17.0=pyhd8ed1ab_0
+  - scikit-learn=1.6.0=py312h7a48858_0
+  - streamlit=1.41.1=pyhd8ed1ab_1
+  - xarray=2024.11.0=pyhd8ed1ab_0
+  - zarr=2.18.4=pyhd8ed1ab_0
+
