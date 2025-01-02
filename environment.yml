@@ -1,14 +1,21 @@
-name: streamlit-modeling
+name: modeltest
 channels:
   - conda-forge
   - nodefaults
 dependencies:
-  - bambi
-  - plotly
-  - rioxarray
-  - scikit-learn
-  - streamlit
-  - xarray
-  - zarr
-  - geopandas
-
+  - python=3.12.8
+  - streamlit=1.41.1
+  - plotly=5.24.1
+  - bambi=0.15.0
+  - scikit-learn=1.6.0
+  - xarray=2024.11.0
+  - zarr=2.18.4
+  - geopandas=1.0.1
+  - rioxarray=0.17.0
+  - pandas=2.2.3
+  - numpy=1.26.4
+  - pydeck=0.8.0
+  - matplotlib-base=3.10.0
+  - fiona  # Required for geopandas
+  - shapely=2.0.6
+  - pyproj=3.7.0
