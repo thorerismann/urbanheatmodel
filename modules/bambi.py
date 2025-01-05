@@ -164,15 +164,15 @@ def create_priors(var_list, family, sigma=0.5, mu=0, heavy_tails=False):
                 priors[var] = bmb.Prior("StudentT", mu=mu, sigma=sigma, nu=3)
             else:
                 # Standard normal prior
-                priors[var] = bmb.Prior("Normal", mu=mu, sigma=sigma)
+                priors[var] = bmb.Prior("Normal", mu=mu, sigma=sigma, nu=3)
 
     elif family == 't':
         # Priors for Student's t-distribution models
         for var in var_list:
             if heavy_tails:
-                priors[var] = bmb.Prior("StudentT", mu=mu, sigma=sigma, nu=3)
+                priors[var] = bmb.Prior("StudentT", mu=mu, sigma=sigma, nu=4)
             else:
-                priors[var] = bmb.Prior("StudentT", mu=mu, sigma=sigma)
+                priors[var] = bmb.Prior("StudentT", mu=mu, sigma=sigma, nu=3)
 
     return priors
 
