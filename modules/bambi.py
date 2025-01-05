@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
 import plotly.express as px
-from modules.load_data import load_zarr_data, load_meteo, load_station_temp, load_sensor_points
+from modules.load_data import load_zarr_data, load_station_temp, load_sensor_points
 import streamlit as st
 import bambi as bmb
 import arviz as az
@@ -12,11 +12,10 @@ import xarray as xr
 
 
 def load_base_data():
-    dsm = load_meteo()
     df = load_station_temp()
     s = load_sensor_points()
     z = load_zarr_data()
-    return dsm, df, s, z
+    return df, s, z
 
 
 def display_variable_menu():
