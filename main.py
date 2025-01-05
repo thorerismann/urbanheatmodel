@@ -12,7 +12,7 @@ tabs = st.tabs(["Bambi Modeling", "Forest Model", "Other Model", "Raw Data Viz",
 # 1. Bambi Modeling Tab
 with tabs[0]:
     st.header("Bambi Modeling")
-    dsm, df, s, z = load_base_data()
+    df, s, z = load_base_data()
     m1, m2 = st.columns(2)
     with m1:
         display_variable_menu()
