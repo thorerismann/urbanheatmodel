@@ -17,125 +17,74 @@ def load_base_data():
     z = load_zarr_data()
     return df, s, z
 
-
-def display_variable_menu():
+def display_bambi_menu():
     with st.form('variable_menu'):
-        st.markdown('##### Select variables')
-        st.text('The variable-buffer combinations represent the values of rester grids at 10m taken as either count (landuse categories) or mean (fitnah data) at the 50 or250 meters buffer for the selected variable.')
-        st.text('The dependent variables are tropical nights (count data, use Poisson or negative binomial family in the next menu) or urban heat island value (use t or gaussian family in the next menu)')
+        st.markdown('##### Specify model')
+        st.text('USe this app to model the urban heat index and tropical nights in Biel using a Bayesian generalized linear model approach. Choose a couple of variables and leave the default model specifications to get started.')
         # Available buffers and geospatial variables
         buffers_list = [50, 250]
         numvars = 5
+        max_interactions=2
+        max_polynomials = 3
         geo_vars = [
             "Water", "Buildings", "Paved", "Developed", "Forest",
-            "Grass", "fitnah_ss", 'fitnah_sv', 'fitnah_temp'
+            "Grass", "fitnah_ss", 'fitnah_sv', 'fitnah_temp', 'dem'
         ]
-        c1, c2 = st.columns(2)
-        with c1:
-            # Select buffers
-            selected_buffers = [
-                st.radio(f'Select Buffer for var{x}', buffers_list, key=f"buffer{x}", horizontal=True)
-                for x in range(1, numvars + 1)
-            ]
-        with c2:
-            # Select geospatial variables
-            selected_vars = [
-                st.selectbox(f'Select variable for var{x}', geo_vars, key=f"var{x}")
-                for x in range(1, numvars + 1)
-            ]
-
-        number_of_vars = st.number_input(
-            'Select the number of variables (excluding interaction terms). Variables are selected in order',
-            min_value=1, max_value=5, value=5
-        )
-
+        var_buff_combinations = [f"{var}_{buf}" for var in geo_vars for buf in buffers_list]
         response = st.selectbox(
             'Select Response Variable:',
             ['tropical_nights', 'uhi']
         )
-        submit_model = st.form_submit_button('Submit Step One')
+        variables = st.multiselect('Select variables', var_buff_combinations, max_selections=numvars)
+        interactions = [st.multiselect(f'Select terms for interaction term {x+1}', var_buff_combinations, max_selections=2, key = f'interaction_{x}') for x in range(0, max_interactions+1)]
+        polynomials = st.multiselect('Select polynomials', var_buff_combinations, max_selections=max_polynomials)
+        st.divider()
+        st.markdown('##### Specify model parameters')
+
+        chains = st.number_input(
+            'Select the number of Chains',
+            min_value=2, max_value=8, value=2
+        )
+        draws = st.number_input(
+            'Select the number of Draws',
+            min_value=500, max_value=5000, value=1000
+        )
+        family = st.selectbox(
+            'Select Distribution',
+            ['t', 'negativebinomial', 'poisson', 'gaussian']
+        )
+        st.divider()
+
+        st.markdown('##### Priors')
+        c1, c2 = st.columns(2)
+        with c1:
+            use_priors = st.toggle('Use priors')
+            sigma = st.number_input('Sigma', value=1.0, min_value=0.25)
+        with c2:
+            heavy_tails = st.checkbox('Fat tails', False)
+            mu = st.number_input('Mu', value=0.0, min_value=-100.0)
+        submit_model = st.form_submit_button('Submit Model')
+
     if submit_model:
-        indep_dict = {}
-        final_vars = selected_vars[:number_of_vars]
-        final_bufs = selected_buffers[:number_of_vars]
+        all_vars = variables + polynomials + [item for sublist in interactions for item in sublist]
+        all_vars = list(set(all_vars))
+        st.session_state['bambi_selection']  = {'dep_var': response,
+                                                'vars': variables,
+                                                'family': family,
+                                                'chains': chains,
+                                                'draws': draws,
+                                                'use_priors': use_priors,
+                                                'sigma': sigma,
+                                                'heavy_tails': heavy_tails,
+                                                'mu': mu,
+                                                'interactions': interactions,
+                                                'polynomials': polynomials,
+                                                'all_vars':all_vars
+                                                }
+        st.write('Expand below to see the selected parameters.')
+        st.json(st.session_state['bambi_selection'], expanded=False)
 
-        for (var, buf) in zip(final_vars, final_bufs):
-            key = f"{var}_{buf}"  # e.g. "Water_50"
-            indep_dict[key] = (var, buf)
-
-        st.session_state['first_menu']  = {'dep_var': response, 'indep_dict': indep_dict, 'final_vars': final_vars, 'final_bufs': final_bufs}
-
-def display_model_menu():
-    if not st.session_state.get('first_menu'):
-        st.info("Select variables above to get started with modelling")
-    if st.session_state.get('first_menu'):
-
-        selected_vars = st.session_state.first_menu['final_vars']
-        selected_buffers = st.session_state.first_menu['final_bufs']
-        dep_var = st.session_state.first_menu['dep_var']
-        indep_dict = st.session_state.first_menu['indep_dict']
-        with st.form('model_menu'):
-            st.markdown('##### Select Details About the Model')
-            st.text('Change the model here. Increasing the chains and draws will increase accuracy and cost computing time and memory.')
-            st.text('Note that squaring the variable will replace the original value.')
-            st.text('Choose the appropriate family for the uhi or for tropical nights.')
-            st.text('fat tails, mu and sigma are only relevant if priors are toggled.')
-            chains = st.number_input(
-                'Select the number of Chains',
-                min_value=2, max_value=8, value=2
-            )
-            draws = st.number_input(
-                'Select the number of Draws',
-                min_value=500, max_value=5000, value=1000
-            )
-            family = st.selectbox(
-                'Select Distribution',
-                ['t', 'negativebinomial', 'poisson', 'gaussian']
-            )
-
-            # Using the first `number_of_vars` only
-            squared_terms = st.multiselect(
-                'select variables to square',
-                [f'{v}_{b}' for v, b in zip(selected_vars, selected_buffers)]
-            )
-            interaction_one = st.multiselect("Select first interaction term (select two!)", [f'{v}_{b}' for v, b in zip(selected_vars, selected_buffers)], max_selections=2, key='interaction_one')
-            interaction_two = st.multiselect("Select second interaction term (select two!", [f'{v}_{b}' for v, b in zip(selected_vars, selected_buffers)], max_selections=2, key='interaction_two')
-
-            c1, c2 = st.columns(2)
-            with c1:
-                use_priors = st.toggle('Use priors')
-                sigma = st.number_input('Sigma', 1.0)
-            with c2:
-                heavy_tails = st.checkbox('Fat tails', False)
-                mu = st.number_input('Mu', 0.0)
-
-
-
-            submit = st.form_submit_button('create model')
-        if submit:
-            st.cache_data.clear()
-            st.cache_resource.clear()
-            if use_priors:
-                priors = create_priors(list(indep_dict.keys()), family, sigma, mu, heavy_tails)
-            else:
-                priors=None
-            # Store everything in session state
-            st.session_state['bambi_selection'] = {
-                'indep_dict': indep_dict,
-                'dep_var': dep_var,
-                'chains': chains,
-                'draws': draws,
-                'family': family,
-                'squared_terms': squared_terms,
-                'interaction_one': interaction_one,
-                'interaction_two': interaction_two,
-                'priors': priors
-            }
-
-            st.json(st.session_state['bambi_selection'], expanded=False)
-
-
-def create_priors(var_list, family, sigma=0.5, mu=0, heavy_tails=False):
+def create_priors(meta):
     """
     Creates priors for variables based on the model's family.
 
@@ -150,6 +99,11 @@ def create_priors(var_list, family, sigma=0.5, mu=0, heavy_tails=False):
         dict: A dictionary of priors for the specified variables.
     """
     priors = {}
+    family = st.session_state.bambi_selection['family']
+    sigma = st.session_state.bambi_selection['sigma']
+    mu = st.session_state.bambi_selection['mu']
+    heavy_tails = st.session_state.bambi_selection['heavy_tails']
+    var_list = st.session_state.bambi_selection['vars']
 
     if family in ['poisson', 'negativebinomial']:
         # Normal priors for count models
@@ -169,28 +123,15 @@ def create_priors(var_list, family, sigma=0.5, mu=0, heavy_tails=False):
     elif family == 't':
         # Priors for Student's t-distribution models
         for var in var_list:
-            if heavy_tails:
-                priors[var] = bmb.Prior("StudentT", mu=mu, sigma=sigma, nu=4)
-            else:
-                priors[var] = bmb.Prior("StudentT", mu=mu, sigma=sigma, nu=3)
+            priors[var] = bmb.Prior("StudentT", mu=mu, sigma=sigma, nu=3)
 
     return priors
 
 def prepare_uhi_data(station_data, sensors, excluded_loggers):
     """
-    Example usage of the stored 'indep_dict' to build the data.
     """
     dep = station_data.groupby('logger')['uhi'].mean()
-
-    # Grab the dictionary from session_state
-    vb = st.session_state.bambi_selection['indep_dict'].values()
-    # vb is something like [(50, "Water"), (250, "Buildings"), ...]
-
-    # Convert (buf, var) => "var_buf"
-    columns_needed = [f"{var}_{buf}" for (var, buf) in vb]
-
-    # Merge with logger
-    data = sensors[['logger'] + columns_needed]
+    data = sensors[['logger'] + st.session_state.bambi_selection['all_vars']]
     full = data.merge(pd.DataFrame(dep).reset_index(), on='logger')
     full = full[~full.logger.isin(excluded_loggers)]
 
@@ -204,18 +145,9 @@ def prepare_uhi_data(station_data, sensors, excluded_loggers):
 
 def prepare_tn_data(station_data, sensors, excluded_loggers):
     """
-    Example usage of the stored 'indep_dict' to build the data.
     """
     dep = station_data.groupby('logger')['tropical_nights'].sum()
-
-    # Grab the dictionary from session_state
-    vb = st.session_state.bambi_selection['indep_dict'].values()
-    # vb is something like [(50, "Water"), (250, "Buildings"), ...]
-
-    # Convert (buf, var) => "var_buf"
-    columns_needed = [f"{var}_{buf}" for (var, buf) in vb]
-
-    data = sensors[['logger'] + columns_needed]
+    data = sensors[['logger'] + st.session_state.bambi_selection['all_vars']]
     full = data.merge(pd.DataFrame(dep).reset_index(), on='logger')
     full = full[~full.logger.isin(excluded_loggers)]
 
@@ -227,63 +159,44 @@ def prepare_tn_data(station_data, sensors, excluded_loggers):
 
     return full
 
-def create_interactions(meta, data):
-    if len(meta['interaction_one']) == 2:
-        data["_".join(meta['interaction_one'])] = data[meta['interaction_one'][0]] * data[meta['interaction_one'][1]]
-    if len (meta['interaction_two']) == 2:
-        data['_'.join(meta['interaction_two'])] = data[meta['interaction_two'][0]] * data[meta['interaction_two'][1]]
-    return data
-
-def add_squared(meta, data):
-    if len(meta['squared_terms']) == 0:
-        st.write('No terms to square')
-        return data
-    else:
-        st.write('Squaring terms: ' + str(meta['squared_terms']))
-        for col in meta['squared_terms']:
-            data[col] = data[col]**2
-
-
 
 @st.cache_resource
-def create_bambi_model(data, _meta, draws=500, chains=2):
+def create_bambi_model(data, _meta):
+    y = _meta['dep_var']
+    draws = _meta['draws']
+    chains = _meta['chains']
+    family = _meta['family']
+    if _meta['use_priors']:
+        _meta['priors'] = create_priors(_meta)
+    else:
+        _meta['priors'] = None
 
-    y = st.session_state.bambi_selection['dep_var']
-    z = st.session_state.bambi_selection['indep_dict'].values()
-    # Add interaction terms to the dataset
-    data = create_interactions(_meta, data)
-    st.write('final dataset is:')
-    st.write(data)
-    base_predictors = " + ".join([f"{var}_{buf}" for var, buf in z])
+    predictors = " + ".join(_meta['vars'])
+    formula = f"{y} ~ {predictors}"
 
-    # Interaction terms (if any)
-    interaction_terms = []
-    if len(_meta.get('interaction_one', [])) == 2:
-        interaction_terms.append("_".join(_meta['interaction_one']))
-    if len(_meta.get('interaction_two', [])) == 2:
-        interaction_terms.append("_".join(_meta['interaction_two']))
+    for x in _meta['polynomials']:
+        data[f'{x}_sq'] = data[x]**2
+        formula = formula + " + " + f'{x}_sq'
 
-    # Combine predictors and interactions into the formula
-    all_predictors = base_predictors
-    if interaction_terms:
-        all_predictors += " + " + " + ".join(interaction_terms)
-
-    formula = f"{y} ~ {all_predictors}"
-    st.write('the formula is', formula)
+    for x in _meta['interactions']:
+        if len(x) == 2:
+            formula = formula + " + " + f'{x[0]}:{x[1]}'
     st.write('the family is', _meta['family'])
     if _meta['priors']:
         st.write('the priors used are:')
         st.write(_meta['priors'])
     else:
         st.write('No priors used')
-    model = bmb.Model(formula, data, family=_meta['family'], priors=_meta['priors'])
+    st.write('The BAMBI string formula is', formula)
+
+    model = bmb.Model(formula, data, family=family, priors=_meta['priors'])
     st.write('model created. Fiting data...')
     results = model.fit(draws=draws, chains=chains)
     st.write('finished fitting the model to the data')
     return model, results
 
 
-def visualize_basic_results(results, plot_type, model):
+def visualize_basic_results(results, plot_type):
     """
     Visualize ArviZ plots based on the plot type.
 
@@ -436,17 +349,48 @@ def visualize_bambi_model(model, results, sensors):
     selection = st.selectbox('Select plot type :', ['trace', 'forest', 'posterior_predictive', 'observed_vs_predicted'])
 
     if selection == 'trace':
-        visualize_basic_results(results, 'trace', model)
+        visualize_basic_results(results, 'trace')
 
     if selection == 'forest':
-        visualize_basic_results(results, 'forest', model)
+        visualize_basic_results(results, 'forest')
 
     if selection == 'posterior_predictive':
-        visualize_basic_results(results, 'posterior_predictive', model)
+        visualize_basic_results(results, 'posterior_predictive')
 
     if selection == 'observed_vs_predicted':
         plot_predicted_vs_actual(results, sensors)
 
+def prepare_interaction_raster(meta, data):
+    interactions = []
+    for interaction in [meta['interaction_one'], meta['interaction_two']]:
+        if len(interaction) == 2:
+            split_v1 = interaction[0].split('_')
+            if len(split_v1) == 2:
+                var1 = split_v1[0]
+                buf1 = split_v1[1]
+            else:
+                var1 = split_v1[0] + '_' + split_v1[1]
+                buf1 = split_v1[2]
+            split_v2 = interaction[1].split('_')
+            if len(split_v2) == 2:
+                var2 = split_v2[0]
+                buf2 = split_v2[1]
+            else:
+                var2 = split_v2[0] + '_' + split_v2[1]
+                buf2 = split_v2[2]
+            da = data[var1].sel(buffer=int(buf1)) * data[var2].sel(buffer=int(buf2))
+            da.name=("_".join([var1, buf1, var2, buf2]))
+            interactions.append(da)
+    if len(interactions) == 2:
+        interactions_ds = xr.Dataset({
+            interactions[0].name: interactions[0],
+            interactions[1].name: interactions[1]
+        })
+    elif len(interactions) == 1:
+        interactions_ds = xr.Dataset({interactions[0].name: interactions[0]})
+    else:
+        interactions_ds = None
+    return interactions_ds
 
 def extract_predictors(oldds, buffer_dict, selectionx, selectiony):
     """
@@ -481,7 +425,7 @@ def extract_predictors(oldds, buffer_dict, selectionx, selectiony):
     return combined
 
 @st.cache_data
-def apply_bambi_model_to_netcdf(_model, _ds, _results, buffer_dict, squares):
+def apply_bambi_model_to_netcdf(_model, _ds, _interactions, _results, buffer_dict):
     """
     Applies a fitted Bambi model to a NetCDF dataset for prediction, keeping track of cell indices.
 
@@ -633,7 +577,7 @@ def visualize_predictions_interactive(pred_da, sensors):
         labels={st.session_state.bambi_selection['dep_var']: "Prediction Mean"},
         title="Predictions for Biel"
     )
-    hd_extra = [f'{x}_{y}' for x, y in st.session_state.bambi_selection['indep_dict'].values()]
+    hd_extra = [f'{x}_{y}' for x, y in st.session_state.bambi_selection['vars']]
 
     def helper_function(row):
         """
@@ -690,3 +634,4 @@ def visualize_predictions_interactive(pred_da, sensors):
 
     # Display in Streamlit
     st.plotly_chart(fig)
+

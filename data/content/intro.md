@@ -1,8 +1,8 @@
-import streamlit as st
-from modules.bambi import *
-from modules.see_base_data import main_viz
+"""# Streamlit Model Setup Explanation
 
-content = st.markdown("""## Overview
+Below is a detailed explanation of how the Streamlit forms gather user selections and store them in a dictionary for Bayesian model construction using Bambi.
+
+## Overview
 
 1. **Variable Selection**  
    - The user selects up to five geospatial variables (e.g., `"Water"`, `"Buildings"`, etc.) and pairs each with a buffer distance (either 50m or 250m).  
@@ -39,56 +39,6 @@ content = st.markdown("""## Overview
 - **`interaction_two`**: A list containing two `"var_buf"` strings selected for the second interaction term.  
 - **`priors`**: If priors are toggled on, contains user-specified prior settings for sigma, mu, and whether to use fat tails (or `None` if no priors were selected).
 
-```python""")
+Use the following snippet with a Streamlit expander to display this information:
 
-st.title("Modeling Urban Heat in Biel - A simple approach")
-with st.expander('Explanation', expanded=False):
-    st.write('hi')
-    st.markdown(content)
-tabs = st.tabs(["Bambi Modeling", "Forest Model", "Raw Data Viz", "Explanation"])
-
-# 1. Bambi Modeling Tab
-with tabs[0]:
-    st.header("Bambi Modeling")
-
-    df, s, z = load_base_data()
-    display_bambi_menu()
-    meta_bambi = st.session_state.get('bambi_selection')
-    if meta_bambi:
-        if meta_bambi['dep_var'] == 'tropical_nights':
-            data = prepare_tn_data(df, s, [207, 240, 239, 231, 230])
-            st.write("Mean of tropical_nights:", data['tropical_nights'].mean())
-            st.write("Variance of tropical_nights:", data['tropical_nights'].var())
-        else:
-            data = prepare_uhi_data(df, s, [207, 240, 239, 231])
-        with st.container(border=True):
-            model, results = create_bambi_model(data, meta_bambi)
-            if st.button('Run a new model'):
-                st.session_state.pop('bambi_selection')
-                st.rerun()
-        with st.container(border=True):
-            if st.toggle('Plot Model Results', False):
-                st.subheader('Model Results')
-                visualize_bambi_model(model, results, s)
-        with st.container(border=True):
-            if st.toggle('Apply model to the city of Biel'):
-                st.write('Be patient...takes some time')
-                interactions = prepare_interaction_raster(meta_bambi, z)
-                st.write('prepped')
-                sensors = s.merge(data[['logger',meta_bambi['dep_var']]], on='logger', how='left')
-                map = apply_bambi_model_to_netcdf(model, z, interactions, results, st.session_state.bambi_selection['vars'])
-                st.write('prediction map created')
-                visualize_predictions_interactive(map, sensors)
-# 2. Random Forest Tab
-with tabs[1]:
-    st.header("Random Forest Model")
-    st.write("Train a Random Forest model.")
-    # Placeholder for scikit-learn Random Forest
-
-# 4. Raw Data Viz Tab
-with tabs[2]:
-    st.header("Raw Data Visualization")
-    main_viz()
-
-with tabs[3]:
-    st.write('Explanation')
+```python"""
