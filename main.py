@@ -2,8 +2,7 @@ import streamlit as st
 from modules.bambi import *
 from modules.see_base_data import main_viz
 
-content = st.markdown("""## Overview
-
+content = """## Overview
 1. **Variable Selection**  
    - The user selects up to five geospatial variables (e.g., `"Water"`, `"Buildings"`, etc.) and pairs each with a buffer distance (either 50m or 250m).  
    - Only the first `number_of_vars` are ultimately kept for the model.  
@@ -39,13 +38,10 @@ content = st.markdown("""## Overview
 - **`interaction_two`**: A list containing two `"var_buf"` strings selected for the second interaction term.  
 - **`priors`**: If priors are toggled on, contains user-specified prior settings for sigma, mu, and whether to use fat tails (or `None` if no priors were selected).
 
-```python""")
+```python"""
 
 st.title("Modeling Urban Heat in Biel - A simple approach")
-with st.expander('Explanation', expanded=False):
-    st.write('hi')
-    st.markdown(content)
-tabs = st.tabs(["Bambi Modeling", "Forest Model", "Raw Data Viz", "Explanation"])
+tabs = st.tabs(["Bambi Modeling", "Raw Data Viz", "Explanation"])
 
 # 1. Bambi Modeling Tab
 with tabs[0]:
@@ -79,16 +75,10 @@ with tabs[0]:
                 map = apply_bambi_model_to_netcdf(model, z, interactions, results, st.session_state.bambi_selection['vars'])
                 st.write('prediction map created')
                 visualize_predictions_interactive(map, sensors)
-# 2. Random Forest Tab
-with tabs[1]:
-    st.header("Random Forest Model")
-    st.write("Train a Random Forest model.")
-    # Placeholder for scikit-learn Random Forest
 
-# 4. Raw Data Viz Tab
-with tabs[2]:
+with tabs[1]:
     st.header("Raw Data Visualization")
     main_viz()
 
-with tabs[3]:
-    st.write('Explanation')
+with tabs[2]:
+    st.markdown(content)

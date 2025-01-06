@@ -20,7 +20,6 @@ def load_base_data():
 def display_bambi_menu():
     with st.form('variable_menu'):
         st.markdown('##### Specify model')
-        st.text('USe this app to model the urban heat index and tropical nights in Biel using a Bayesian generalized linear model approach. Choose a couple of variables and leave the default model specifications to get started.')
         # Available buffers and geospatial variables
         buffers_list = [50, 250]
         numvars = 5
