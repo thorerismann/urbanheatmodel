@@ -60,7 +60,7 @@ with tabs[0]:
         with st.container(border=True):
             model, results = create_bambi_model(data, meta_bambi)
             if st.button('Run a new model'):
-                st.session_state.pop('bambi_selection')
+                st.session_state.clear()
                 st.rerun()
         with st.container(border=True):
             if st.toggle('Plot Model Results', False):
