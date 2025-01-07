@@ -61,7 +61,8 @@ with tabs[0]:
             model, results = create_bambi_model(data, meta_bambi)
             if st.button('Run a new model'):
                 st.session_state.clear()
-                st.rerun()
+                if st.session_state.get('bambi_model'):
+                    del st.session_state['bambi_model']
         with st.container(border=True):
             if st.toggle('Plot Model Results', False):
                 st.subheader('Model Results')
