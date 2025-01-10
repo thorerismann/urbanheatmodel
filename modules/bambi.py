@@ -1,4 +1,13 @@
-from pathlib import Path
+"""
+Module: bambi.py
+
+This module provides utilities for constructing and fitting Bayesian models
+using the Bambi library. It includes functions for creating priors, preparing
+data, and visualizing model results, along with utilities for model application
+and prediction.
+"""
+
+
 
 import numpy as np
 import pandas as pd
@@ -11,13 +20,33 @@ import arviz as az
 import xarray as xr
 
 
-def load_base_data():
+
+def load_base_data() -> tuple[pd.DataFrame, pd.DataFrame, xr.Dataset]:
+    """
+    Load base data required for modeling, including station temperature data,
+    sensor points, and Zarr data.
+
+    Returns
+    -------
+    tuple[pd.DataFrame, pd.DataFrame, xr.Dataset]
+        - Station temperature data as a DataFrame.
+        - Sensor points data as a DataFrame.
+        - Zarr data as an xarray Dataset.
+    """
+
     df = load_station_temp()
     s = load_sensor_points()
     z = load_zarr_data()
     return df, s, z
 
-def display_bambi_menu():
+def display_bambi_menu() -> None:
+    """
+    Display a Streamlit form for selecting variables, model parameters, and priors.
+
+    Captures user selections and stores them in Streamlit's session state for
+    use in Bayesian modeling.
+    """
+
     with st.form('variable_menu'):
         st.markdown('##### Specify model')
         # Available buffers and geospatial variables
@@ -80,22 +109,24 @@ def display_bambi_menu():
                                                 'polynomials': polynomials,
                                                 'all_vars':all_vars
                                                 }
-        st.write('Expand below to see the selected parameters.')
-        st.json(st.session_state['bambi_selection'], expanded=False)
+        c1, c2 = st.columns(2)
+        with c1:
+            st.write('Expand to see the selected parameters.')
+        with c2:
+            st.json(st.session_state['bambi_selection'], expanded=False)
 
-def create_priors(meta):
+def create_priors() -> dict:
+    """
+    Create priors for model variables based on the selected distribution family.
+
+    Returns
+    -------
+    dict
+        A dictionary containing prior distributions for each variable.
+    """
+
     """
     Creates priors for variables based on the model's family.
-
-    Parameters:
-        var_list (list): List of predictor variable names.
-        meta (dict): Dictionary with metadata, including the family.
-        sigma (float): Standard deviation for the normal prior (default: 0.5).
-        mu (float): Mean for the normal prior (default: 0).
-        heavy_tails (bool): Use priors with heavier tails for Gaussian/Student's t (default: False).
-
-    Returns:
-        dict: A dictionary of priors for the specified variables.
     """
     priors = {}
     family = st.session_state.bambi_selection['family']
@@ -117,7 +148,7 @@ def create_priors(meta):
                 priors[var] = bmb.Prior("StudentT", mu=mu, sigma=sigma, nu=3)
             else:
                 # Standard normal prior
-                priors[var] = bmb.Prior("Normal", mu=mu, sigma=sigma, nu=3)
+                priors[var] = bmb.Prior("Normal", mu=mu, sigma=sigma)
 
     elif family == 't':
         # Priors for Student's t-distribution models
@@ -126,10 +157,35 @@ def create_priors(meta):
 
     return priors
 
-def prepare_uhi_data(station_data, sensors, excluded_loggers):
+def prepare_rep_data(station_data: pd.DataFrame, sensors: pd.DataFrame,
+                     excluded_loggers: list[int], key: str) -> pd.DataFrame:
+    """
+    Prepare representative data by merging station and sensor data and excluding
+    specified loggers.
+
+    Parameters
+    ----------
+    station_data : pd.DataFrame
+        DataFrame containing station temperature data.
+    sensors : pd.DataFrame
+        DataFrame containing sensor data.
+    excluded_loggers : list[int]
+        List of logger IDs to exclude from the data.
+    key : str
+        Key to determine the dependent variable, either 'uhi' or 'tropical_nights'.
+
+    Returns
+    -------
+    pd.DataFrame
+        A DataFrame with the merged and filtered data.
+    """
+
     """
     """
-    dep = station_data.groupby('logger')['uhi'].mean()
+    if key == 'uhi':
+        dep = station_data.groupby('logger')['uhi'].mean()
+    else:
+        dep = station_data.groupby('logger')['tropical_nights'].sum()
     data = sensors[['logger'] + st.session_state.bambi_selection['all_vars']]
     full = data.merge(pd.DataFrame(dep).reset_index(), on='logger')
     full = full[~full.logger.isin(excluded_loggers)]
@@ -140,33 +196,33 @@ def prepare_uhi_data(station_data, sensors, excluded_loggers):
         full = full.dropna(how='any')
     full = full.sort_values(by=['logger'])
     return full
-
-
-def prepare_tn_data(station_data, sensors, excluded_loggers):
-    """
-    """
-    dep = station_data.groupby('logger')['tropical_nights'].sum()
-    data = sensors[['logger'] + st.session_state.bambi_selection['all_vars']]
-    full = data.merge(pd.DataFrame(dep).reset_index(), on='logger')
-    full = full[~full.logger.isin(excluded_loggers)]
-
-    total_na = full.isna().sum()
-    if total_na.sum() > 0:
-        st.write('total na values', total_na)
-        full = full.dropna(how='any')
-    full = full.sort_values(by=['logger'])
-
-    return full
-
 
 @st.cache_resource
-def create_bambi_model(data, _meta):
+def create_bambi_model(data: pd.DataFrame, _meta: dict, hashed: dict) -> tuple[bmb.Model, az.InferenceData]:
+    """
+    Create and fit a Bayesian model using Bambi.
+
+    Parameters
+    ----------
+    data : pd.DataFrame
+        The input data for modeling.
+    _meta : dict
+        Metadata containing model parameters and settings.
+    hashed : dict
+        Hashed metadata for caching purposes.
+
+    Returns
+    -------
+    tuple[bmb.Model, az.InferenceData]
+        The fitted Bambi model and its inference data.
+    """
+
     y = _meta['dep_var']
     draws = _meta['draws']
     chains = _meta['chains']
     family = _meta['family']
     if _meta['use_priors']:
-        _meta['priors'] = create_priors(_meta)
+        _meta['priors'] = create_priors()
     else:
         _meta['priors'] = None
 
@@ -195,24 +251,22 @@ def create_bambi_model(data, _meta):
     return model, results
 
 
-def visualize_basic_results(results, plot_type):
+def visualize_basic_results(results: az.InferenceData, plot_type: str) -> None:
     """
-    Visualize ArviZ plots based on the plot type.
+    Visualize ArviZ plots based on the specified plot type.
 
     Parameters
     ----------
-    results : arviz.InferenceData
+    results : az.InferenceData
         The model's inference data.
     plot_type : str
         Type of plot: 'forest', 'trace', or 'posterior_predictive'.
-    model : bambi.Model, optional
-        The Bambi model (required for posterior predictive plots).
 
     Returns
     -------
-    matplotlib.figure.Figure
-        The generated plot figure.
+    None
     """
+
     if plot_type == 'forest':
         axes = az.plot_forest(results)
         fig = axes.ravel()[0].figure
@@ -238,15 +292,15 @@ def visualize_basic_results(results, plot_type):
         raise ValueError(f"Unsupported plot type: {plot_type}")
 
 
-def calculate_metrics(observed, predicted):
+def calculate_metrics(observed: np.ndarray, predicted: np.ndarray) -> dict:
     """
-    Calculate model performance metrics.
+    Calculate performance metrics for model evaluation.
 
     Parameters
     ----------
-    observed : np.array or pd.Series
+    observed : np.ndarray
         Array of observed values.
-    predicted : np.array or pd.Series
+    predicted : np.ndarray
         Array of predicted values.
 
     Returns
@@ -254,6 +308,7 @@ def calculate_metrics(observed, predicted):
     dict
         A dictionary containing R-squared, RMSE, and Willmott's D.
     """
+
     observed = np.array(observed)
     predicted = np.array(predicted)
 
@@ -271,20 +326,20 @@ def calculate_metrics(observed, predicted):
         "Willmott's D": willmott_d
     }
 
-def plot_predicted_vs_actual(results, sensors):
+def plot_predicted_vs_actual(results: az.InferenceData) -> None:
     """
-    Extract posterior predictive means and actual values, compute metrics, and create plots.
+    Plot predicted vs. actual values and display performance metrics.
 
     Parameters
     ----------
-    results : arviz.InferenceData
-        The InferenceData object containing observed and predicted data.
+    results : az.InferenceData
+        InferenceData object containing observed and predicted values.
 
     Returns
     -------
     None
-        Displays metrics and plots using Streamlit.
     """
+
     # Extract observed data
     target_variable = st.session_state.bambi_selection['dep_var']
     if "observed_data" not in results.groups() or target_variable not in results.observed_data:
@@ -340,7 +395,22 @@ def plot_predicted_vs_actual(results, sensors):
 
 
 
-def visualize_bambi_model(model, results, sensors):
+def visualize_bambi_model(model: bmb.Model, results: az.InferenceData) -> None:
+    """
+    Visualize model results, including summary statistics and various plot types.
+
+    Parameters
+    ----------
+    model : bmb.Model
+        The fitted Bambi model.
+    results : az.InferenceData
+        The model's inference data.
+
+    Returns
+    -------
+    None
+    """
+
     st.markdown('##### Summary table of results')
     summary_df = az.summary(results)
     st.dataframe(summary_df)
@@ -357,9 +427,25 @@ def visualize_bambi_model(model, results, sensors):
         visualize_basic_results(results, 'posterior_predictive')
 
     if selection == 'observed_vs_predicted':
-        plot_predicted_vs_actual(results, sensors)
+        plot_predicted_vs_actual(results)
 
-def prepare_interaction_raster(meta, data):
+def prepare_interaction_raster(meta: dict, data: xr.Dataset) -> xr.Dataset:
+    """
+    Prepare interaction terms for raster data based on the model's metadata.
+
+    Parameters
+    ----------
+    meta : dict
+        Metadata containing interaction term details.
+    data : xr.Dataset
+        Dataset containing raster data.
+
+    Returns
+    -------
+    xr.Dataset
+        Dataset with interaction terms as new variables.
+    """
+
     interactions = []
     for interaction in [meta['interaction_one'], meta['interaction_two']]:
         if len(interaction) == 2:
@@ -391,23 +477,27 @@ def prepare_interaction_raster(meta, data):
         interactions_ds = None
     return interactions_ds
 
-def extract_predictors(oldds, buffer_dict, selectionx, selectiony):
+def extract_predictors(oldds: xr.Dataset, buffer_dict: dict,
+                       selectionx: tuple[float, float], selectiony: tuple[float, float]) -> pd.DataFrame:
     """
-    Extract predictor variables from a NetCDF dataset.
+    Extract predictor variables from a NetCDF dataset within a specified area.
 
     Parameters
     ----------
-    ds : xarray.Dataset
+    oldds : xr.Dataset
         The input dataset containing variables and buffers.
     buffer_dict : dict
-        A mapping of variable names to buffer sizes (or None for non-buffered).
+        Mapping of variable names to buffer sizes.
+    selectionx : tuple[float, float]
+        Range of X coordinates to select.
+    selectiony : tuple[float, float]
+        Range of Y coordinates to select.
 
     Returns
     -------
     pd.DataFrame
         A DataFrame containing predictors with (X, Y) indices.
     """
-
     # Slice the dataset for a subset
     ds = oldds.sel(X=slice(selectionx[0], selectionx[1]), Y=slice(selectiony[1],selectiony[0]))
     predictors = []
@@ -424,29 +514,30 @@ def extract_predictors(oldds, buffer_dict, selectionx, selectiony):
     return combined
 
 @st.cache_data
-def apply_bambi_model_to_netcdf(_model, _ds, _interactions, _results, buffer_dict):
+def apply_bambi_model_to_netcdf(_model: bmb.Model, _ds: xr.Dataset, _interactions: xr.Dataset,
+                                _results: az.InferenceData, buffer_dict: dict) -> xr.DataArray:
     """
-    Applies a fitted Bambi model to a NetCDF dataset for prediction, keeping track of cell indices.
+    Apply a fitted Bambi model to a NetCDF dataset for predictions.
 
     Parameters
     ----------
-    _model : bambi.Model
+    _model : bmb.Model
         The fitted Bambi model.
-    ds : xr.Dataset
+    _ds : xr.Dataset
         The NetCDF dataset containing predictor variables.
+    _interactions : xr.Dataset
+        Interaction terms dataset.
+    _results : az.InferenceData
+        Inference data from the fitted model.
     buffer_dict : dict
-        A mapping of predictor variable names to buffer sizes.
-        Example: {"fitnah_temp": [50, 250], "Forest": [250]}
-    results : arviz.InferenceData
-        The fitted model's posterior samples.
+        Mapping of predictor variable names to buffer sizes.
 
     Returns
     -------
     xr.DataArray
-        A 2D xarray.DataArray of predictions, reshaped to match the NetCDF grid.
-    pd.DataFrame
-        A DataFrame of the flattened data including `(Y, X)` indices and predictions.
+        A DataArray of predictions reshaped to match the NetCDF grid.
     """
+
 
     # Extract grid information
     ystart = 1.218
@@ -483,14 +574,13 @@ def apply_bambi_model_to_netcdf(_model, _ds, _interactions, _results, buffer_dic
         dastd = pred_std.set_index(['X', 'Y'])[st.session_state.bambi_selection['dep_var']].to_xarray()
         dastd.name = st.session_state.bambi_selection['dep_var']
         # rasters.append(dastd)
-        test = damean.reindex
         dfs.append(pred_mean.set_index(['X','Y'])[st.session_state.bambi_selection['dep_var']])
 
     #total = xr.concat(rasters, dim=['X','Y'])
     total = pd.concat(dfs,axis=0)
-    sorted = total.sort_index().reset_index()
-    sorted = sorted.drop_duplicates(['X','Y'])
-    dstotal = sorted.set_index(['X','Y']).to_xarray()
+    sorted_data = total.sort_index().reset_index()
+    sorted_data = sorted_data.drop_duplicates(['X','Y'])
+    dstotal = sorted_data.set_index(['X','Y']).to_xarray()
 
 
     return dstotal
@@ -537,21 +627,22 @@ def visualize_predictions(pred_da, sensor_locs):
     plt.close(fig)
 
 
-def visualize_predictions_interactive(pred_da, sensors):
+def visualize_predictions_interactive(pred_da: xr.DataArray, sensors: pd.DataFrame) -> None:
     """
-    Visualizes predictions and overlays sensor locations on an interactive Plotly map with hover data.
+    Visualize predictions interactively with sensor locations using Plotly.
 
     Parameters
     ----------
     pred_da : xr.DataArray
-        The mean predictions reshaped into a 2D grid as an xarray.DataArray.
+        Prediction data reshaped as a 2D grid.
     sensors : pd.DataFrame
-        A DataFrame with sensor locations, must contain 'X', 'Y', and additional hover data columns.
+        DataFrame with sensor locations and additional data for hover information.
 
     Returns
     -------
     None
     """
+
     # Filter sensor locations
     sensor_locs = sensors[~sensors.logger.isin([207, 239, 240, 231])]
     st.write(sensor_locs)

@@ -49,12 +49,12 @@ def train_random_forest(station_data, sensors, excluded_loggers=None,
     merged = merged.dropna(subset=indep_cols + [resp])
 
     # Prepare X (predictors) and y (target)
-    X = merged[indep_cols]
+    x = merged[indep_cols]
     y = merged[resp]
 
     # Split into train/test for demonstration
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, random_state=random_state
+    x_train, x_test, y_train, y_test = train_test_split(
+        x, y, test_size=0.2, random_state=random_state
     )
 
     # Create and fit the RandomForestRegressor
@@ -63,9 +63,9 @@ def train_random_forest(station_data, sensors, excluded_loggers=None,
         max_depth=max_depth,
         random_state=random_state
     )
-    model.fit(X_train, y_train)
+    model.fit(x_train, y_train)
 
     st.write("Random Forest model trained successfully!")
-    st.write(f"Train size: {X_train.shape}, Test size: {X_test.shape}")
+    st.write(f"Train size: {x_train.shape}, Test size: {x_test.shape}")
 
-    return model, X_train, X_test, y_train, y_test
+    return model, x_train, x_test, y_train, y_test
