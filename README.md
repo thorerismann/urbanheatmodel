@@ -1,5 +1,7 @@
 # Simple Modelling of Biel/Bienne's Hot Spots
 
+See the application [here](https://urbanheatmodel.streamlit.app/). Download and run locally for a better experience and more accurate results.
+
 Use the data layers provided by the canton of Bern and SwissTopo and the empirical data from the summer 2023 measurement campaign season to model the distribution of urban heat in Biel/Bienne.
 
 ---
